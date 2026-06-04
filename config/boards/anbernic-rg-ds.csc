@@ -2,7 +2,8 @@
 BOARD_NAME="Anbernic RG DS"
 BOARD_VENDOR="Anbernic"
 BOARDFAMILY="rk35xx"
-BOARD_MAINTAINER="jackheinlein"
+BOOT_SOC="rk3568"
+BOARD_MAINTAINER="Jack Heinlein"
 INTRODUCED="2025"
 KERNEL_TARGET="edge"
 KERNEL_TEST_TARGET="edge"
@@ -13,13 +14,10 @@ SERIALCON="ttyS2" # RG DS serial console: ttyS2 @ 1500000
 BOOTFS_TYPE="fat"
 IMAGE_PARTITION_TABLE="gpt"
 
-# rkbin blobs are not bundled in this repo. The bl31 v1.45 / ddr 1056MHz v1.23
-# this board needs are not present in armbian/rkbin, so point the rkbin-tools
-# fetch at Rockchip's official rkbin and reference its bin/rk35 layout. They are
-# downloaded at build time (no binaries committed here).
-declare -g RKBIN_GIT_URL="https://github.com/rockchip-linux/rkbin"
-BL31_BLOB="bin/rk35/rk3568_bl31_v1.45.elf"
-DDR_BLOB="bin/rk35/rk3568_ddr_1056MHz_v1.23.bin"
+# rk3568 DDR v1.23 / BL31 v1.45 (matches the ROCKNIX-proven bootloader on this
+# board). Fetched from armbian/rkbin at build time; no binaries committed here.
+BL31_BLOB="rk35/rk3568_bl31_v1.45.elf"
+DDR_BLOB="rk35/rk3568_ddr_1056MHz_v1.23.bin"
 
 # Mainline U-Boot (quartz64-a-rk3566 defconfig + rk3568 DDR v1.23 / BL31 v1.45)
 function post_family_config__anbernic_rg_ds_mainline_uboot() {
@@ -37,16 +35,24 @@ function post_family_config__anbernic_rg_ds_mainline_uboot() {
 	}
 }
 
-# Enable the RG DS drivers (generic-dsi panel, rocknix single-ADC joypad, aw87391
-# amplifier) and their dependencies. The drivers themselves are added in-tree by
-# the board-rgds-* kernel patches.
+# RG DS kernel options. Panel (jadard JD9365DA-H3) and input (adc-joystick) are
+# already in mainline; only the aw87391 speaker amplifier driver is added in-tree
+# by a board-rgds patch. Most of these may already be on in the rockchip64 edge
+# config; set explicitly so the board is self-contained.
 function custom_kernel_config__anbernic_rg_ds() {
 	[[ ! -f .config ]] && return 0
 
-	kernel_config_set_m DRM_PANEL_GENERIC_DSI
-	kernel_config_set_m JOYSTICK_ROCKNIX_SINGLEADC
+	# Display: mainline jadard JD9365DA-H3 dual-DSI panels
+	kernel_config_set_m DRM_PANEL_JADARD_JD9365DA_H3
+	# Input: adc-joystick (via io-channel-mux + gpio-mux) and adc-keys
+	kernel_config_set_m JOYSTICK_ADC
+	kernel_config_set_m IIO_MUX
+	kernel_config_set_m MUX_GPIO
+	kernel_config_set_y MULTIPLEXER
+	kernel_config_set_m KEYBOARD_ADC
 	kernel_config_set_y IIO
 	kernel_config_set_m ROCKCHIP_SARADC
+	# Audio: aw87391 speaker amplifiers (driver added in-tree by board-rgds patch)
 	kernel_config_set_m SND_SOC_AW87391
 	kernel_config_set_y USB_GADGET
 	kernel_config_set_y USB_LIBCOMPOSITE
