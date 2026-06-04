@@ -1,4 +1,4 @@
-From: Jack Heinlein <jackheinleinsupremeoverlordjabs.co>
+From: crackerjacques <jack@supremeoverlordjabs.co>
 Subject: [PATCH] arm64: dts: rockchip: rk3568-anbernic-rg-ds: wire up aw87391 speaker amps
 
 The mainline RG DS device tree leaves the two awinic aw87391 speaker
@@ -9,7 +9,7 @@ Pairs with the in-tree aw87391 ASoC driver (board-rgds aw87391 patch).
 Headphones already work via the rk817 codec; only the speaker amps were
 missing.
 
-Signed-off-by: Jack Heinlein <jackheinleinsupremeoverlordjabs.co>
+Signed-off-by: crackerjacques <jack@supremeoverlordjabs.co>
 
 --- a/arch/arm64/boot/dts/rockchip/rk3568-anbernic-rg-ds.dts
 +++ b/arch/arm64/boot/dts/rockchip/rk3568-anbernic-rg-ds.dts

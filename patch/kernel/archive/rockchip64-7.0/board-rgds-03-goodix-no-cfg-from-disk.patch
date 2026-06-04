@@ -1,4 +1,4 @@
-From: Jack Heinlein <jaxxworkshop@gmail.com>
+From: crackerjacques <jack@supremeoverlordjabs.co>
 Subject: [PATCH] input: touchscreen: goodix: don't load config from disk (RG DS dual gt911)
 
 The Anbernic RG DS has two gt911 touchscreens (same ID 911, same i2c addr on
@@ -9,7 +9,7 @@ panel without a working touch IRQ (and incurs a ~60s firmware timeout). Disable
 it so the IRQ is set up synchronously in probe using the chip's built-in config.
 Mirrors ROCKNIX's goodix usability fix.
 
-Signed-off-by: Jack Heinlein <jaxxworkshop@gmail.com>
+Signed-off-by: crackerjacques <jack@supremeoverlordjabs.co>
 
 --- a/drivers/input/touchscreen/goodix.c
 +++ b/drivers/input/touchscreen/goodix.c
