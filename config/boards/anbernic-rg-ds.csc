@@ -1,14 +1,18 @@
-# Anbernic RG DS - Rockchip RK3568 quad-core, dual 4" 640x480 handheld
+# Anbernic RG DS - Rockchip RK3568 quad-core dual 4" 640x480 MIPI-DSI touch handheld - eMMC/MicroSD, WiFi/BT, USB-C x2, speaker/headphone, gamepad
 BOARD_NAME="Anbernic RG DS"
 BOARD_VENDOR="Anbernic"
 BOARDFAMILY="rk35xx"
 BOOT_SOC="rk3568"
 BOARD_MAINTAINER="crackerjacques"
 INTRODUCED="2025"
-KERNEL_TARGET="edge"
+KERNEL_TARGET="edge,bleedingedge"
 KERNEL_TEST_TARGET="edge"
 
 PACKAGE_LIST_BOARD+=" python3-evdev python3-libevdev xinput"
+
+# Load the USB serial gadget at boot so the ttyGS0 console (OTG port) exists.
+# The shared kernel ships USB_G_SERIAL as a module, so the board loads it here.
+MODULES="g_serial"
 
 BOOT_FDT_FILE="rockchip/rk3568-anbernic-rg-ds.dtb"
 BOOT_SCENARIO="spl-blobs"
@@ -23,7 +27,6 @@ DDR_BLOB="rk35/rk3568_ddr_1056MHz_v1.23.bin"
 
 # Mainline U-Boot (quartz64-a-rk3566 defconfig + rk3568 DDR v1.23 / BL31 v1.45)
 function post_family_config__anbernic_rg_ds_mainline_uboot() {
-	[[ "${BOARD}" == "anbernic-rg-ds" ]] || return 0
 	display_alert "$BOARD" "mainline U-Boot v2026.01 (quartz64-a-rk3566 + rk3568 DDR v1.23)" "info"
 	declare -g BOOTCONFIG="quartz64-a-rk3566_defconfig"
 	declare -g BOOTSOURCE="https://github.com/u-boot/u-boot.git"
@@ -37,40 +40,11 @@ function post_family_config__anbernic_rg_ds_mainline_uboot() {
 	}
 }
 
-# RG DS kernel options. Panel (jadard JD9365DA-H3) and input (adc-joystick) are
-# already in mainline; only the aw87391 speaker amplifier driver is added in-tree
-# by a board-rgds patch. Most of these may already be on in the rockchip64 edge
-# config; set explicitly so the board is self-contained.
-function custom_kernel_config__anbernic_rg_ds() {
-	[[ ! -f .config ]] && return 0
-
-	# Display: mainline jadard JD9365DA-H3 dual-DSI panels
-	kernel_config_set_m DRM_PANEL_JADARD_JD9365DA_H3
-	# Input: adc-joystick (via io-channel-mux + gpio-mux) and adc-keys
-	kernel_config_set_m JOYSTICK_ADC
-	kernel_config_set_m IIO_MUX
-	kernel_config_set_m MUX_GPIO
-	kernel_config_set_y MULTIPLEXER
-	kernel_config_set_m KEYBOARD_ADC
-	kernel_config_set_y IIO
-	kernel_config_set_m ROCKCHIP_SARADC
-	# Audio: aw87391 speaker amplifiers (driver added in-tree by board-rgds patch)
-	kernel_config_set_m SND_SOC_AW87391
-	kernel_config_set_y USB_GADGET
-	kernel_config_set_y USB_LIBCOMPOSITE
-	kernel_config_set_y USB_CONFIGFS
-	kernel_config_set_y USB_CONFIGFS_ACM
-	kernel_config_set_y USB_G_SERIAL
-	kernel_config_set_y USB_DWC3
-	kernel_config_set_y USB_DWC3_OF_SIMPLE
-}
-
 # Dual-screen (X11): stack the two DSI panels DS-style (DSI-2 top/primary over
 # DSI-1 bottom) and bind each gt911 touchscreen to its panel. xrandr/xinput are
 # X11-only, so this is wired through an xdg autostart entry: it runs on desktop
 # login and never fires on a CLI/tty (or Wayland) session.
 function post_family_tweaks__anbernic_rg_ds_dualscreen() {
-	[[ "${BOARD}" == "anbernic-rg-ds" ]] || return 0
 	display_alert "$BOARD" "installing X11 dual-screen layout helper" "info"
 
 	install -d "${SDCARD}/usr/bin" "${SDCARD}/etc/xdg/autostart"
@@ -80,6 +54,8 @@ function post_family_tweaks__anbernic_rg_ds_dualscreen() {
 		# Anbernic RG DS: DS-style dual-screen layout for X11.
 		# Stacks DSI-2 (top, primary) over DSI-1 (bottom) and maps each gt911
 		# touchscreen (i2c controllers fe5c0000 / fe5e0000) to its own panel.
+		# X11 only: bail out under Wayland / no DISPLAY so xrandr/xinput never error.
+		[ "${XDG_SESSION_TYPE:-}" = "x11" ] && [ -n "${DISPLAY:-}" ] || exit 0
 		sleep 2
 		xrandr --output DSI-1 --pos 0x480
 		xrandr --output DSI-2 --primary --pos 0x0
@@ -111,7 +87,6 @@ function post_family_tweaks__anbernic_rg_ds_dualscreen() {
 # desktop without an external keyboard (evdev/uinput; works on X11 and Wayland).
 # python3-evdev is pulled in via PACKAGE_LIST_BOARD.
 function post_family_tweaks__anbernic_rg_ds_console_input() {
-	[[ "${BOARD}" == "anbernic-rg-ds" ]] || return 0
 	display_alert "$BOARD" "enabling ttyGS0 console + gamepad-to-keyboard" "info"
 
 	# USB-gadget serial console login on the OTG port

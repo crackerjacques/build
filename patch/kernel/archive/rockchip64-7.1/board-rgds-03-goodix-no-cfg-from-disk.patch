@@ -1,0 +1,27 @@
+From: crackerjacques <jack@supremeoverlordjabs.co>
+Subject: [PATCH] input: touchscreen: goodix: don't load config from disk (RG DS dual gt911)
+
+The Anbernic RG DS has two gt911 touchscreens (same ID 911, same i2c addr on
+separate buses). With load_cfg_from_disk=true the driver requests
+goodix_911_cfg.bin asynchronously and sets up the IRQ in the firmware callback;
+with two identical chips requesting the same (missing) firmware this leaves one
+panel without a working touch IRQ (and incurs a ~60s firmware timeout). Disable
+it so the IRQ is set up synchronously in probe using the chip's built-in config.
+Mirrors ROCKNIX's goodix usability fix.
+
+Signed-off-by: crackerjacques <jack@supremeoverlordjabs.co>
+
+--- a/drivers/input/touchscreen/goodix.c
++++ b/drivers/input/touchscreen/goodix.c
+@@ -1021,7 +1021,10 @@
+ 	default:
+ 		if (ts->gpiod_int && ts->gpiod_rst) {
+ 			ts->reset_controller_at_probe = true;
+-			ts->load_cfg_from_disk = true;
++			/* RG DS: dual gt911 share goodix_911_cfg.bin; the async cfg-from-disk
++			 * path leaves one panel without a working IRQ (and adds a ~60s
++			 * firmware timeout). Use the in-probe sync path + built-in config. */
++			/* ts->load_cfg_from_disk = true; */
+ 			ts->irq_pin_access_method = IRQ_PIN_ACCESS_GPIO;
+ 		}
+ 	}
