@@ -6,8 +6,8 @@ Subject: [PATCH] ASoC: codecs: Add aw87391 amplifier driver
 ---
  sound/soc/codecs/Kconfig   |  12 ++
  sound/soc/codecs/Makefile  |   2 +
- sound/soc/codecs/aw87391.c | 270 +++++++++++++++++++++++++++++++++++++
- 3 files changed, 284 insertions(+)
+ sound/soc/codecs/aw87391.c | 271 +++++++++++++++++++++++++++++++++++++
+ 3 files changed, 285 insertions(+)
  create mode 100644 sound/soc/codecs/aw87391.c
 
 diff --git a/sound/soc/codecs/Kconfig b/sound/soc/codecs/Kconfig
@@ -65,7 +65,7 @@ new file mode 100644
 index 000000000000..896db15a2c36
 --- /dev/null
 +++ b/sound/soc/codecs/aw87391.c
-@@ -0,0 +1,270 @@
+@@ -0,0 +1,271 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +//
 +// aw87391.c  --  AW87391 amplifier shim driver
@@ -144,10 +144,11 @@ index 000000000000..896db15a2c36
 +			return ret;
 +	}
 +
-+	if (aw->enable_gpiod) {
++	if (aw->enable_gpiod)
 +		gpiod_set_value_cansleep(aw->enable_gpiod, 1);
++
++	if (aw->vcc || aw->enable_gpiod)
 +		usleep_range(1000, 2000);
-+	}
 +
 +	if (!aw->initialized) {
 +		ret = aw87391_apply_seq(aw, aw87391_init_reg,
@@ -188,10 +189,10 @@ index 000000000000..896db15a2c36
 +	if (!aw->powered)
 +		return 0;
 +
++	/* Best-effort: still drop power even if the OFF write fails, so the
++	 * shared vcc_amp rail is never left powered through suspend/shutdown. */
 +	ret = aw87391_apply_seq(aw, aw87391_off_reg,
 +				ARRAY_SIZE(aw87391_off_reg));
-+	if (ret)
-+		return ret;
 +
 +	if (aw->enable_gpiod) {
 +		gpiod_set_value_cansleep(aw->enable_gpiod, 0);
@@ -206,7 +207,7 @@ index 000000000000..896db15a2c36
 +
 +	aw->powered = false;
 +
-+	return 0;
++	return ret;
 +}
 +
 +static int aw87391_suspend(struct device *dev)
