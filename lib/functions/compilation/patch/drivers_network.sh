@@ -181,6 +181,9 @@ driver_rtl8192EU() {
 		# fix compiler warnings - must be first before other patches
 		process_patch_file "${SRC}/patch/misc/wireless-rtl8192eu-Fix-compile-warnings.patch" "applying"
 
+		# fix -Wmissing-prototypes: static for file-private functions, prototypes in headers for cross-file
+		process_patch_file "${SRC}/patch/misc/wireless-rtl8192eu-Fix-missing-prototypes.patch" "applying"
+
 		process_patch_file "${SRC}/patch/misc/wireless-rtl8192eu-Fix-p2p-go-advertising.patch" "applying"
 
 		# fix compilation for kernels >= 5.4
@@ -633,6 +636,8 @@ driver_uwe5622() {
 		if linux-version compare "${version}" ge 7.1; then
 			process_patch_file "${SRC}/patch/misc/wireless-uwe5622/uwe5622-v7.1.patch" "applying"
 		fi
+
+		process_patch_file "${SRC}/patch/misc/wireless-uwe5622/wireless-uwe5622-Fix-missing-prototypes.patch" "applying"
 	fi
 }
 
