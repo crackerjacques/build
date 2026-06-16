@@ -152,11 +152,9 @@
 	};
 
 	/*
-	 * PDM digital-mic interface on the P1 header (M2 pin mux):
-	 * CLK=GPIO2_A6, SDI0=GPIO2_B5, SDI1=GPIO2_B6, SDI2=GPIO2_B7,
-	 * SDI3=GPIO2_C0. rk3308.dtsi has the pin groups but no controller
-	 * node, so define it here (values from the Rockchip BSP). Disabled
-	 * by default - the pins are shared with i2s_8ch_0 and GPIO.
+	 * PDM digital-mic interface on the P1 header. rk3308.dtsi has the pin
+	 * groups but no controller node, so define it here (Rockchip BSP values).
+	 * Disabled by default - the pins are shared with i2s_8ch_0.
 	 */
 	pdm: pdm@ff380000 {
 		compatible = "rockchip,rk3308-pdm";
@@ -194,11 +192,9 @@
 	};
 
 	/*
-	 * I2S on the P1 header (i2s_8ch_0). rk3308.dtsi has the pin groups but no
-	 * controller node, so define it here (values from the vendor BSP + the
-	 * mainline i2s_8ch_2 binding). Disabled by default; the pins are shared
-	 * with the PDM interface, so the two are mutually exclusive. Basic 4-wire
-	 * I2S: SCLK=GPIO2_A5  LRCK=GPIO2_A7  SDO=GPIO2_B1  SDI=GPIO2_B5.
+	 * I2S (i2s_8ch_0) on the P1 header. rk3308.dtsi has the pin groups but no
+	 * controller node, so define it here (vendor BSP + the mainline i2s_8ch_2
+	 * binding). Disabled by default; shares pins with PDM (mutually exclusive).
 	 */
 	i2s_8ch_0: i2s@ff300000 {
 		compatible = "rockchip,rk3308-i2s-tdm";
@@ -218,6 +214,34 @@
 			     &i2s_8ch_0_sdo0 &i2s_8ch_0_sdi0>;
 		#sound-dai-cells = <0>;
 		status = "disabled";
+	};
+
+	/*
+	 * I2S RX capture: a simple-audio-card on i2s_8ch_0 with a dmic-codec, to
+	 * record an external I2S master. Disabled by default; `novaconfig i2s_rx`
+	 * enables it, switches i2s_8ch_0 to its RX clock pins, and frees those
+	 * pins from the header PWMs.
+	 */
+	i2s_rx_test_codec: i2s-rx-test-codec {
+		compatible = "dmic-codec";
+		#sound-dai-cells = <0>;
+	};
+
+	sound-i2s-rx-test {
+		compatible = "simple-audio-card";
+		simple-audio-card,name = "i2s-rx-test";
+		simple-audio-card,format = "i2s";
+		simple-audio-card,bitclock-master = <&i2s_rx_test_link_codec>;
+		simple-audio-card,frame-master = <&i2s_rx_test_link_codec>;
+		status = "disabled";
+
+		simple-audio-card,cpu {
+			sound-dai = <&i2s_8ch_0>;
+		};
+
+		i2s_rx_test_link_codec: simple-audio-card,codec {
+			sound-dai = <&i2s_rx_test_codec>;
+		};
 	};
 
 	/*

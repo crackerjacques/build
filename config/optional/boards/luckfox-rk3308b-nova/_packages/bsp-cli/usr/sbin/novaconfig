@@ -18,7 +18,7 @@ else
 fi
 
 # ----------------------------------------------------------- interface data
-IFACES="i2c0 i2c1 uart1 uart3 spi2 pdm i2s"
+IFACES="i2c0 i2c1 uart1 uart3 spi2 pdm i2s_tx i2s_rx"
 
 if_path() {
 	case "$1" in
@@ -28,7 +28,8 @@ if_path() {
 	uart3) echo "/serial@ff0d0000" ;;
 	spi2)  echo "/spi@ff140000" ;;
 	pdm)   echo "/pdm@ff380000" ;;
-	i2s)   echo "/i2s@ff300000" ;;
+	i2s_tx) echo "/i2s@ff300000" ;;
+	i2s_rx) echo "/sound-i2s-rx-test" ;;
 	esac
 }
 
@@ -40,7 +41,8 @@ if_pins() {
 	uart3) echo "RX=GPIO3_B4 TX=GPIO3_B5 (ttyS3)" ;;
 	spi2)  echo "MISO=GPIO1_C6 MOSI=GPIO1_C7 CLK=GPIO1_D0 CS=GPIO1_D1" ;;
 	pdm)   echo "CLK=GPIO2_A6 SDI0-3=GPIO2_B5/B6/B7/C0 (P1, card hw:1,0)" ;;
-	i2s)   echo "SCLK=GPIO2_A5 LRCK=GPIO2_A7 SDO=GPIO2_B1 SDI=GPIO2_B5 (P1, shares pdm pins)" ;;
+	i2s_tx) echo "TX/master: SCLK=GPIO2_A5 LRCK=GPIO2_A7 SDO=GPIO2_B1 SDI=GPIO2_B5 (P1, shares pdm pins)" ;;
+	i2s_rx) echo "RX capture: BCLK=GPIO2_A6 LRCK=GPIO2_B0 DATA=GPIO2_B5 (frees pwm@ff160030/ff170030; card hw:i2srxtest)" ;;
 	esac
 }
 
@@ -48,7 +50,7 @@ if_pins() {
 if_group() {
 	case "$1" in
 	i2c0|uart1|spi2) echo gpio1d ;;
-	pdm|i2s) echo gpio2_audio ;;
+	pdm|i2s_tx|i2s_rx) echo gpio2_audio ;;
 	*) echo "" ;;
 	esac
 }
@@ -77,6 +79,25 @@ emit_overlay() {
 			status = "okay";
 		};
 	};
+};
+EOF
+	elif [ "$1" = i2s_rx ]; then
+		# i2s_8ch_0 in RX/slave mode + the dmic capture card. Switch to the
+		# RX clock pins and free them from the two header PWMs that squat there.
+		cat > "$tmp" <<EOF
+/dts-v1/;
+/plugin/;
+/ {
+	fragment@0 {
+		target-path = "/i2s@ff300000";
+		__overlay__ {
+			status = "okay";
+			pinctrl-0 = <&i2s_8ch_0_sclkrx &i2s_8ch_0_lrckrx &i2s_8ch_0_sdi0>;
+		};
+	};
+	fragment@1 { target-path = "/pwm@ff160030"; __overlay__ { status = "disabled"; }; };
+	fragment@2 { target-path = "/pwm@ff170030"; __overlay__ { status = "disabled"; }; };
+	fragment@3 { target-path = "/sound-i2s-rx-test"; __overlay__ { status = "okay"; }; };
 };
 EOF
 	elif [ "$1" = spi2 ]; then
@@ -113,7 +134,7 @@ EOF
 };
 EOF
 	fi
-	dtc -q -I dts -O dtb -o "$OVL_DIR/nova-$1.dtbo" "$tmp"
+	dtc -q -@ -I dts -O dtb -o "$OVL_DIR/nova-$1.dtbo" "$tmp"
 }
 
 # -------------------------------------------------- boot-config read/write
@@ -207,10 +228,17 @@ iface_menu() {
 			if is_enabled "$n"; then st="[ENABLED ]"; else st="[disabled]"; fi
 			printf '  %d) %-6s %s live=%-8s %s\n' "$i" "$n" "$st" "$(live_status "$n")" "$(if_pins "$n")"
 		done
+		echo "  9) disable all"
 		echo "  0) back"
 		printf 'toggle which? '
 		read -r c
 		[ "$c" = 0 ] && return
+		if [ "$c" = 9 ]; then
+			for n in $(enabled_list); do rm -f "$OVL_DIR/nova-$n.dtbo"; done
+			write_list ""
+			echo ">> all interfaces disabled (reboot to apply)"
+			continue
+		fi
 		i=0
 		for n in $IFACES; do
 			i=$((i + 1))
@@ -243,6 +271,6 @@ while :; do
 		[ -n "$a" ] && pwmtest "$a" "${b:-1000}" "${d:-50}"
 		;;
 	4) iface_menu ;;
-	0) exit 0 ;;
+	0) echo; echo "*** don't forget to reboot! ***"; exit 0 ;;
 	esac
 done

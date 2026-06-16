@@ -10,7 +10,7 @@ GPIO_BASE=$((0xff220000))
 
 die() { echo "gpiocheck: $*" >&2; exit 1; }
 
-readl() { # addr -> prints decimal value
+readl() {
 	if command -v devmem >/dev/null 2>&1; then
 		printf '%d\n' "$(devmem "$1")"
 	else
@@ -20,8 +20,7 @@ readl() { # addr -> prints decimal value
 	fi
 }
 
-# iomux register offset for bank+letter; echoes "offset width" or "-"
-mux_off() { # bank letter num
+mux_off() {
 	case "$1$2" in
 	0A) echo "$((0x00)) 2" ;;
 	0B) echo "$((0x08)) 2" ;;
@@ -43,7 +42,7 @@ mux_off() { # bank letter num
 	esac
 }
 
-pull_off() { # bank letter
+pull_off() {
 	case "$1$2" in
 	0A) echo $((0xa0)) ;; 0B) echo $((0xa4)) ;; 0C) echo $((0xa8)) ;;
 	1A) echo $((0xb0)) ;; 1B) echo $((0xb4)) ;; 1C) echo $((0xb8)) ;; 1D) echo $((0xbc)) ;;
@@ -54,7 +53,7 @@ pull_off() { # bank letter
 	esac
 }
 
-mux_get() { # bank letter num -> "gpio" | "f1" | "f2" | "f3" | "?"
+mux_get() {
 	set -- "$1" "$2" "$3" $(mux_off "$1" "$2" "$3")
 	[ "$4" = "-" ] && { echo "?"; return; }
 	if [ "$5" = 4 ]; then shift_n=$((($3 % 4) * 4)); mask=15
@@ -64,7 +63,7 @@ mux_get() { # bank letter num -> "gpio" | "f1" | "f2" | "f3" | "?"
 	[ "$f" = 0 ] && echo "gpio" || echo "f$f"
 }
 
-pull_get() { # bank letter num -> none|up|down|hold
+pull_get() {
 	off=$(pull_off "$1" "$2")
 	[ "$off" = "-" ] && { echo "?"; return; }
 	v=$(readl $((GRF + off)))
@@ -75,7 +74,7 @@ pull_get() { # bank letter num -> none|up|down|hold
 
 letter_idx() { case "$1" in A) echo 0 ;; B) echo 1 ;; C) echo 2 ;; D) echo 3 ;; esac; }
 
-parse_pin() { # GPIO4_D2 / gpio4d2 / 4D2 -> sets bank letter num line global
+parse_pin() {
 	p=$(echo "$1" | tr 'a-z' 'A-Z' | sed -e 's/^GPIO//' -e 's/_//')
 	bank=${p%%[A-D]*}
 	rest=${p#"$bank"}
@@ -108,7 +107,7 @@ show_pin() {
 	fi
 }
 
-sysfs_pin() { # global
+sysfs_pin() {
 	g=/sys/class/gpio/gpio$1
 	[ -d "$g" ] || echo "$1" > /sys/class/gpio/export 2>/dev/null
 	[ -d "$g" ] || die "cannot export gpio$1 (claimed by a driver?)"
