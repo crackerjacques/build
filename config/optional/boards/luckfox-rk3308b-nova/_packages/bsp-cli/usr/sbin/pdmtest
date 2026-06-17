@@ -19,7 +19,7 @@ case "$CH"  in ''|*[!0-9]*) die "channels must be a number: $CH" ;; esac
 grep -q pdm-mics /proc/asound/cards 2>/dev/null \
 	|| die "no pdm-mics card - enable it: novaconfig -> interfaces -> pdm, then reboot"
 
-OUT=/tmp/pdmtest.wav
+OUT=$(mktemp /tmp/pdmtest.XXXXXX.wav) || die "mktemp failed"
 echo "recording PDM: ${CH}ch S32_LE 48kHz for ${DUR}s -> $OUT"
 arecord -D hw:pdmmics,0 -r 48000 -f S32_LE -c "$CH" -d "$DUR" "$OUT" || die "arecord failed"
 

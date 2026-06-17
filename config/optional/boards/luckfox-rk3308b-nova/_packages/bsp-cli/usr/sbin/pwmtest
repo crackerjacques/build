@@ -51,7 +51,7 @@ list() {
 			per=$(cat "$c/pwm0/period" 2>/dev/null)
 			dut=$(cat "$c/pwm0/duty_cycle" 2>/dev/null)
 			state="exported enable=$en period=${per}ns duty=${dut}ns"
-		elif ls "$c"/../*/pwm-* >/dev/null 2>&1; then
+		elif ls "$c"/pwm-* >/dev/null 2>&1; then
 			state="in use (kernel)"
 		fi
 		[ "$name" = pwm0 ] && state="claimed by vdd_core regulator - DO NOT TOUCH"
@@ -79,6 +79,7 @@ duty=${3:-50}
 [ "$duty" -ge 0 ] 2>/dev/null && [ "$duty" -le 100 ] || die "bad duty '$duty' (0-100)"
 
 period=$((1000000000 / freq))
+[ "$period" -gt 0 ] || die "frequency '$freq' Hz is too high"
 dc=$((period * duty / 100))
 
 [ -d "$chip/pwm0" ] || echo 0 > "$chip/export"
@@ -90,7 +91,7 @@ dc=$((period * duty / 100))
 echo 0 > "$chip/pwm0/enable" 2>/dev/null
 echo 0 > "$chip/pwm0/duty_cycle" 2>/dev/null
 [ -f "$chip/pwm0/polarity" ] && echo normal > "$chip/pwm0/polarity" 2>/dev/null
-echo "$period" > "$chip/pwm0/period"
-echo "$dc" > "$chip/pwm0/duty_cycle"
-echo 1 > "$chip/pwm0/enable"
+echo "$period" > "$chip/pwm0/period" || die "failed to set period"
+echo "$dc" > "$chip/pwm0/duty_cycle" || die "failed to set duty_cycle"
+echo 1 > "$chip/pwm0/enable" || die "failed to enable $name"
 echo "$name ($(pin_of "$name")): ${freq} Hz, ${duty}% (period ${period}ns, duty ${dc}ns)"

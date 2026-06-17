@@ -61,7 +61,7 @@ emit_overlay() {
 		echo "dtc not found (Armbian: apt install device-tree-compiler)" >&2
 		return 1
 	}
-	tmp=/tmp/nova-$1.dts
+	tmp=$(mktemp /tmp/novaconfig.XXXXXX.dts) || return 1
 	if [ "$1" = pdm ]; then
 		cat > "$tmp" <<EOF
 /dts-v1/;
@@ -134,7 +134,8 @@ EOF
 };
 EOF
 	fi
-	dtc -q -@ -I dts -O dtb -o "$OVL_DIR/nova-$1.dtbo" "$tmp"
+	dtc -q -@ -I dts -O dtb -o "$OVL_DIR/nova-$1.dtbo" "$tmp" || { rm -f "$tmp"; return 1; }
+	rm -f "$tmp"
 }
 
 # -------------------------------------------------- boot-config read/write
@@ -155,16 +156,21 @@ write_list() {
 	names="$*"
 	case "$MODE" in
 	armbian)
+		# preserve overlays the user added that aren't ours
+		others=$(sed -n 's/^user_overlays=//p' "$ENV" | tr ' ' '\n' \
+			| grep -v '^nova-' | grep -v '^$' | tr '\n' ' ')
 		toks=""
 		for n in $names; do toks="$toks nova-$n"; done
-		toks=${toks# }
+		toks=$(echo "$others$toks" | tr -s ' '); toks=${toks# }; toks=${toks% }
 		sed -i '/^user_overlays=/d' "$ENV"
 		[ -n "$toks" ] && echo "user_overlays=$toks" >> "$ENV"
 		;;
 	extlinux)
+		others=$(sed -n 's/^[[:space:]]*fdtoverlays[[:space:]]*//p' "$CONF" | tr ' ' '\n' \
+			| grep -v '/nova-' | grep -v '^$' | tr '\n' ' ')
 		paths=""
 		for n in $names; do paths="$paths $OVL_DIR/nova-$n.dtbo"; done
-		paths=${paths# }
+		paths=$(echo "$others$paths" | tr -s ' '); paths=${paths# }; paths=${paths% }
 		sed -i '/^[[:space:]]*fdtoverlays/d' "$CONF"
 		[ -n "$paths" ] && sed -i "/devicetree /a\\	fdtoverlays $paths" "$CONF"
 		;;
@@ -195,6 +201,16 @@ toggle() {
 					return
 				fi
 			done
+		fi
+		# i2s_rx's overlay references base-DTB labels (the RX pinctrl groups),
+		# which need a /__symbols__ node - i.e. a kernel DTB built with dtc -@.
+		# Without it the bootloader can't apply the overlay and the boot fails,
+		# so refuse here rather than leave an unbootable image.
+		if [ "$name" = i2s_rx ] && [ ! -e /proc/device-tree/__symbols__ ] \
+		   && [ ! -e /sys/firmware/devicetree/base/__symbols__ ]; then
+			echo ">> $name needs a base DTB with /__symbols__ (kernel built with dtc -@)."
+			echo "   This image's DTB has none; enabling it would break boot. Refusing."
+			return
 		fi
 		emit_overlay "$name" || return
 		write_list $(enabled_list) "$name"

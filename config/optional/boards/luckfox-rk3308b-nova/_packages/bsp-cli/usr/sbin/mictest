@@ -27,11 +27,11 @@ else
 fi
 
 if [ "${2:-}" = all ]; then
-	OUT=/tmp/mictest8.wav
+	OUT=$(mktemp /tmp/mictest8.XXXXXX.wav) || die "mktemp failed"
 	echo "recording all 8 ADC channels for ${DUR}s -> $OUT (mic = channel 8)"
 	arecord -D mics -r 48000 -f S16_LE -c 8 -d "$DUR" "$OUT" || die "arecord failed"
 else
-	OUT=/tmp/mictest.wav
+	OUT=$(mktemp /tmp/mictest.XXXXXX.wav) || die "mktemp failed"
 	echo "recording the on-board mic for ${DUR}s -> $OUT"
 	arecord -D mic -r 48000 -f S16_LE -c 1 -d "$DUR" "$OUT" || die "arecord failed"
 fi

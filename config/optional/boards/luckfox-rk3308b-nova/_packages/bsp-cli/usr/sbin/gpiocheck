@@ -145,10 +145,10 @@ case "$#" in
 		echo "GPIO${bank}_${letter}${num} = $(cat "$g/value")"
 		;;
 	out)
-		[ -n "$3" ] || die "usage: gpiocheck <pin> out 0|1"
+		case "$3" in 0|1) ;; *) die "usage: gpiocheck <pin> out 0|1" ;; esac
 		g=$(sysfs_pin "$global")
-		echo out > "$g/direction"
-		echo "$3" > "$g/value"
+		echo out > "$g/direction" || die "cannot set direction on gpio$global"
+		echo "$3" > "$g/value" || die "cannot drive gpio$global"
 		echo "GPIO${bank}_${letter}${num} driven to $3"
 		;;
 	*) die "unknown action '$2' (in / out 0|1)" ;;
