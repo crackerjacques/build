@@ -1,0 +1,50 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Luckfox Lyra Ultra (non-W: no WiFi/BT) on a mainline kernel.
+ *
+ * RK3506B / triple Cortex-A7 / 512MB DDR3 / eMMC. Minimal bring-up:
+ * debug console on UART0 (0xff0a0000) and the on-board eMMC. Display,
+ * Ethernet and the audio/CAN/flexbus blocks are intentionally left out
+ * until their drivers land in mainline.
+ */
+
+/dts-v1/;
+
+#include "rk3506.dtsi"
+
+/ {
+	model = "Luckfox Lyra Ultra";
+	compatible = "rockchip,rk3506b-lyra-ultra", "rockchip,rk3506";
+
+	aliases {
+		serial0 = &uart0;
+		mmc0 = &mmc;
+	};
+
+	chosen {
+		stdout-path = "serial0:1500000n8";
+	};
+
+	memory@0 {
+		device_type = "memory";
+		reg = <0x0 0x20000000>;
+	};
+};
+
+&uart0 {
+	status = "okay";
+};
+
+&mmc {
+	bus-width = <4>;
+	cap-mmc-highspeed;
+	mmc-ddr-1_8v;
+	non-removable;
+	no-sd;
+	no-sdio;
+	disable-wp;
+	supports-emmc;
+	pinctrl-names = "default";
+	pinctrl-0 = <&sdmmc_clk_pins &sdmmc_cmd_pins &sdmmc_bus4_pins>;
+	status = "okay";
+};

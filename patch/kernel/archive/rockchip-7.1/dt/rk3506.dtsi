@@ -1,0 +1,294 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Minimal RK3506(B) SoC core device tree for mainline boot.
+ *
+ * RK3506 (triple Cortex-A7, ARMv7) is only partially upstream as of 2026:
+ * the clock/reset/pinctrl/uart drivers are merged but no SoC .dtsi exists
+ * yet. This file ports just the core nodes needed to bring up a console and
+ * eMMC, written against the mainline bindings (rockchip,rk3506-cru etc.).
+ *
+ * Scope: cpu / gic / timer / psci / cru / grf+ioc syscons / pinctrl / gpio /
+ *        uart0 (debug console) / mmc (eMMC).
+ * Out of scope (drivers not yet mainlined): gmac, pinctrl-rmio, vop/dsi,
+ *        canfd, flexbus, dsmc, audio (sai/spdif/pdm/asrc).
+ *
+ * Values taken from the Rockchip BSP (armbian/linux-rockchip rk-6.1-rkr5.1
+ * rk3502.dtsi / rk3506.dtsi) and cross-checked against the live DTB pulled
+ * from a Luckfox Lyra Ultra running the vendor 6.1 kernel.
+ */
+
+#include <dt-bindings/clock/rockchip,rk3506-cru.h>
+#include <dt-bindings/reset/rockchip,rk3506-cru.h>
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/interrupt-controller/arm-gic.h>
+#include <dt-bindings/interrupt-controller/irq.h>
+#include <dt-bindings/pinctrl/rockchip.h>
+
+/ {
+	compatible = "rockchip,rk3506";
+	interrupt-parent = <&gic>;
+	#address-cells = <1>;
+	#size-cells = <1>;
+
+	cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		cpu0: cpu@f00 {
+			device_type = "cpu";
+			compatible = "arm,cortex-a7";
+			reg = <0xf00>;
+			enable-method = "psci";
+			clocks = <&cru ARMCLK>;
+		};
+
+		cpu1: cpu@f01 {
+			device_type = "cpu";
+			compatible = "arm,cortex-a7";
+			reg = <0xf01>;
+			enable-method = "psci";
+			clocks = <&cru ARMCLK>;
+		};
+
+		cpu2: cpu@f02 {
+			device_type = "cpu";
+			compatible = "arm,cortex-a7";
+			reg = <0xf02>;
+			enable-method = "psci";
+			clocks = <&cru ARMCLK>;
+		};
+	};
+
+	psci {
+		compatible = "arm,psci-1.0";
+		method = "smc";
+	};
+
+	xin24m: clock-xin24m {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <24000000>;
+		clock-output-names = "xin24m";
+	};
+
+	xin32k: clock-xin32k {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <32768>;
+		clock-output-names = "xin32k";
+	};
+
+	timer {
+		compatible = "arm,armv7-timer";
+		interrupts = <GIC_PPI 13 (GIC_CPU_MASK_SIMPLE(3) | IRQ_TYPE_LEVEL_HIGH)>,
+			     <GIC_PPI 14 (GIC_CPU_MASK_SIMPLE(3) | IRQ_TYPE_LEVEL_HIGH)>,
+			     <GIC_PPI 11 (GIC_CPU_MASK_SIMPLE(3) | IRQ_TYPE_LEVEL_HIGH)>,
+			     <GIC_PPI 10 (GIC_CPU_MASK_SIMPLE(3) | IRQ_TYPE_LEVEL_HIGH)>;
+		clock-frequency = <24000000>;
+	};
+
+	gic: interrupt-controller@ff581000 {
+		compatible = "arm,gic-400";
+		reg = <0xff581000 0x1000>,
+		      <0xff582000 0x2000>,
+		      <0xff584000 0x2000>,
+		      <0xff586000 0x2000>;
+		interrupts = <GIC_PPI 9 IRQ_TYPE_LEVEL_HIGH>;
+		#interrupt-cells = <3>;
+		interrupt-controller;
+		#address-cells = <0>;
+	};
+
+	grf: syscon@ff288000 {
+		compatible = "rockchip,rk3506-grf", "syscon", "simple-mfd";
+		reg = <0xff288000 0x4000>;
+	};
+
+	ioc_grf: syscon@ff4d8000 {
+		compatible = "rockchip,rk3506-ioc-grf", "syscon";
+		reg = <0xff4d8000 0x8000>;
+	};
+
+	ioc1: syscon@ff660000 {
+		compatible = "rockchip,rk3506-ioc1", "syscon";
+		reg = <0xff660000 0x10000>;
+	};
+
+	grf_pmu: syscon@ff910000 {
+		compatible = "rockchip,rk3506-grf-pmu", "syscon", "simple-mfd";
+		reg = <0xff910000 0x4000>;
+	};
+
+	ioc_pmu: syscon@ff950000 {
+		compatible = "rockchip,rk3506-ioc-pmu", "syscon";
+		reg = <0xff950000 0x10000>;
+	};
+
+	cru: clock-controller@ff9a0000 {
+		compatible = "rockchip,rk3506-cru";
+		reg = <0xff9a0000 0x20000>;
+		rockchip,grf = <&grf>;
+		#clock-cells = <1>;
+		#reset-cells = <1>;
+	};
+
+	uart0: serial@ff0a0000 {
+		compatible = "rockchip,rk3506-uart", "snps,dw-apb-uart";
+		reg = <0xff0a0000 0x100>;
+		interrupts = <GIC_SPI 34 IRQ_TYPE_LEVEL_HIGH>;
+		reg-shift = <2>;
+		reg-io-width = <4>;
+		clocks = <&cru SCLK_UART0>, <&cru PCLK_UART0>;
+		clock-names = "baudclk", "apb_pclk";
+		pinctrl-names = "default";
+		pinctrl-0 = <&uart0_xfer_pins>;
+		status = "disabled";
+	};
+
+	mmc: mmc@ff480000 {
+		compatible = "rockchip,rk3506-dw-mshc", "rockchip,rk3288-dw-mshc";
+		reg = <0xff480000 0x4000>;
+		interrupts = <GIC_SPI 86 IRQ_TYPE_LEVEL_HIGH>;
+		max-frequency = <150000000>;
+		clocks = <&cru HCLK_SDMMC>, <&cru CCLK_SRC_SDMMC>;
+		clock-names = "biu", "ciu";
+		fifo-depth = <0x100>;
+		resets = <&cru SRST_H_SDMMC>;
+		reset-names = "reset";
+		status = "disabled";
+	};
+
+	pinctrl: pinctrl {
+		compatible = "rockchip,rk3506-pinctrl";
+		rockchip,grf = <&ioc_grf>;
+		rockchip,ioc1 = <&ioc1>;
+		rockchip,pmu = <&ioc_pmu>;
+		rockchip,rmio = <&grf_pmu>;
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		gpio0: gpio@ff940000 {
+			compatible = "rockchip,gpio-bank";
+			reg = <0xff940000 0x200>;
+			interrupts = <GIC_SPI 0 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 1 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 2 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 3 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&cru PCLK_GPIO0>, <&cru DBCLK_GPIO0>;
+			gpio-controller;
+			#gpio-cells = <2>;
+			gpio-ranges = <&pinctrl 0 0 32>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
+		};
+
+		gpio1: gpio@ff870000 {
+			compatible = "rockchip,gpio-bank";
+			reg = <0xff870000 0x200>;
+			interrupts = <GIC_SPI 4 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 5 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 6 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 7 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&cru PCLK_GPIO1>, <&cru DBCLK_GPIO1>;
+			gpio-controller;
+			#gpio-cells = <2>;
+			gpio-ranges = <&pinctrl 0 32 32>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
+		};
+
+		gpio2: gpio@ff1c0000 {
+			compatible = "rockchip,gpio-bank";
+			reg = <0xff1c0000 0x200>;
+			interrupts = <GIC_SPI 8 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 9 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 10 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 11 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&cru PCLK_GPIO2>, <&cru DBCLK_GPIO2>;
+			gpio-controller;
+			#gpio-cells = <2>;
+			gpio-ranges = <&pinctrl 0 64 32>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
+		};
+
+		gpio3: gpio@ff1d0000 {
+			compatible = "rockchip,gpio-bank";
+			reg = <0xff1d0000 0x200>;
+			interrupts = <GIC_SPI 12 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 13 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 14 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 15 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&cru PCLK_GPIO3>, <&cru DBCLK_GPIO3>;
+			gpio-controller;
+			#gpio-cells = <2>;
+			gpio-ranges = <&pinctrl 0 96 32>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
+		};
+
+		gpio4: gpio@ff1e0000 {
+			compatible = "rockchip,gpio-bank";
+			reg = <0xff1e0000 0x200>;
+			interrupts = <GIC_SPI 16 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 17 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 18 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 19 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&cru PCLK_GPIO4>, <&cru DBCLK_GPIO4>;
+			gpio-controller;
+			#gpio-cells = <2>;
+			gpio-ranges = <&pinctrl 0 128 32>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
+		};
+
+		pcfg_pull_up: pcfg-pull-up {
+			bias-pull-up;
+		};
+
+		pcfg_pull_none: pcfg-pull-none {
+			bias-disable;
+		};
+
+		pcfg_pull_down: pcfg-pull-down {
+			bias-pull-down;
+		};
+
+		uart0 {
+			uart0_xfer_pins: uart0-xfer-pins {
+				rockchip,pins =
+					/* uart0_rx */
+					<0 RK_PC7 1 &pcfg_pull_up>,
+					/* uart0_tx */
+					<0 RK_PC6 1 &pcfg_pull_up>;
+			};
+		};
+
+		sdmmc {
+			sdmmc_clk_pins: sdmmc-clk-pins {
+				rockchip,pins =
+					/* sdmmc_clk */
+					<3 RK_PA0 1 &pcfg_pull_none>;
+			};
+
+			sdmmc_cmd_pins: sdmmc-cmd-pins {
+				rockchip,pins =
+					/* sdmmc_cmd */
+					<3 RK_PA1 1 &pcfg_pull_up>;
+			};
+
+			sdmmc_bus4_pins: sdmmc-bus4-pins {
+				rockchip,pins =
+					/* sdmmc_d0 */
+					<3 RK_PA2 1 &pcfg_pull_up>,
+					/* sdmmc_d1 */
+					<3 RK_PA3 1 &pcfg_pull_up>,
+					/* sdmmc_d2 */
+					<3 RK_PA4 1 &pcfg_pull_up>,
+					/* sdmmc_d3 */
+					<3 RK_PA5 1 &pcfg_pull_up>;
+			};
+		};
+	};
+};
