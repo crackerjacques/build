@@ -1,0 +1,39 @@
+Enable the Luckfox Lyra Ultra recovery key so the board can be re-flashed.
+
+The board has a recovery button on SARADC channel 1 (shorts to GND when
+pressed, press-threshold 0V; see the adc-keys/button-recovery node). The
+generic Rockchip download-key path (arch/arm/mach-rockchip/boot_mode.c,
+rockchip_dnl_mode_check -> weak rockchip_dnl_key_pressed) already reads
+saradc channel 1 and, on a press, sets BOOT_BROM_DOWNLOAD and resets into
+the BootROM maskrom USB mode (flashable with rkdeveloptool/upgrade_tool).
+
+That path was dead on this defconfig for two reasons:
+  - CONFIG_BOARD_LATE_INIT was off, so board_late_init() -> setup_boot_mode()
+    -> rockchip_dnl_mode_check() never ran, i.e. the key was never sampled.
+  - CONFIG_SARADC_ROCKCHIP was off, so there was no UCLASS_ADC "saradc"
+    device and rockchip_dnl_key_pressed() bailed with "no saradc device".
+
+Enable both. Holding the recovery button at boot now drops the board into
+maskrom. (CMD_ROCKUSB / USB_FUNCTION_ROCKUSB are already enabled here, so a
+boot_mode.c change to start the U-Boot RockUSB gadget directly instead of
+maskrom can be layered on top later if maskrom ever proves insufficient.)
+
+diff --git a/configs/luckfox-lyra-ultra-rk3506b_defconfig b/configs/luckfox-lyra-ultra-rk3506b_defconfig
+--- a/configs/luckfox-lyra-ultra-rk3506b_defconfig
++++ b/configs/luckfox-lyra-ultra-rk3506b_defconfig
+@@ -4,6 +4,7 @@ CONFIG_COUNTER_FREQUENCY=24000000
+ CONFIG_ARCH_ROCKCHIP=y
+ CONFIG_DEFAULT_DEVICE_TREE="rk3506b-luckfox-lyra-ultra"
+ CONFIG_ROCKCHIP_RK3506=y
++CONFIG_BOARD_LATE_INIT=y
+ CONFIG_SYS_BOOTM_LEN=0x4000000
+ CONFIG_SYS_LOAD_ADDR=0xc00800
+ CONFIG_DEBUG_UART_BASE=0xFF0A0000
+@@ -32,6 +33,7 @@ CONFIG_OF_SPL_REMOVE_PROPS="clock-names interrupt-parent assigned-clocks assigned
+ CONFIG_BUTTON=y
+ CONFIG_BUTTON_ADC=y
+ # CONFIG_USB_FUNCTION_FASTBOOT is not set
++CONFIG_SARADC_ROCKCHIP=y
+ CONFIG_ROCKCHIP_GPIO=y
+ CONFIG_LED=y
+ CONFIG_LED_GPIO=y

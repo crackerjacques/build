@@ -40,6 +40,7 @@
 			reg = <0xf00>;
 			enable-method = "psci";
 			clocks = <&cru ARMCLK>;
+			clock-frequency = <1200000000>;
 		};
 
 		cpu1: cpu@f01 {
@@ -48,6 +49,7 @@
 			reg = <0xf01>;
 			enable-method = "psci";
 			clocks = <&cru ARMCLK>;
+			clock-frequency = <1200000000>;
 		};
 
 		cpu2: cpu@f02 {
@@ -56,6 +58,7 @@
 			reg = <0xf02>;
 			enable-method = "psci";
 			clocks = <&cru ARMCLK>;
+			clock-frequency = <1200000000>;
 		};
 	};
 
@@ -149,12 +152,31 @@
 		compatible = "rockchip,rk3506-dw-mshc", "rockchip,rk3288-dw-mshc";
 		reg = <0xff480000 0x4000>;
 		interrupts = <GIC_SPI 86 IRQ_TYPE_LEVEL_HIGH>;
-		max-frequency = <150000000>;
+		max-frequency = <52000000>;
 		clocks = <&cru HCLK_SDMMC>, <&cru CCLK_SRC_SDMMC>;
 		clock-names = "biu", "ciu";
 		fifo-depth = <0x100>;
 		resets = <&cru SRST_H_SDMMC>;
 		reset-names = "reset";
+		status = "disabled";
+	};
+
+	gmac1: ethernet@ff4d0000 {
+		compatible = "rockchip,rk3506-gmac", "snps,dwmac-4.20a";
+		reg = <0xff4d0000 0x2000>;
+		interrupts = <GIC_SPI 70 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 73 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-names = "macirq", "eth_wake_irq";
+		/* dwmac-rk fetches all clocks with *_get_optional; rk3506 only
+		 * has the coarse MAC1 clocks. clk_mac_speed reuses CLK_MAC1
+		 * (RMII is a fixed 50MHz so no speed switching happens). */
+		clocks = <&cru CLK_MAC1>, <&cru ACLK_MAC1>,
+			 <&cru PCLK_MAC1>, <&cru CLK_MAC1>;
+		clock-names = "stmmaceth", "aclk_mac", "pclk_mac", "clk_mac_speed";
+		resets = <&cru SRST_A_MAC1>;
+		reset-names = "stmmaceth";
+		rockchip,grf = <&grf>;
+		snps,mixed-burst;
 		status = "disabled";
 	};
 
@@ -288,6 +310,42 @@
 					<3 RK_PA4 1 &pcfg_pull_up>,
 					/* sdmmc_d3 */
 					<3 RK_PA5 1 &pcfg_pull_up>;
+			};
+		};
+
+		gmac1 {
+			rmii1_miim_pins: rmii1-miim-pins {
+				rockchip,pins =
+					/* rmii1_mdc */
+					<3 RK_PB4 2 &pcfg_pull_none>,
+					/* rmii1_mdio */
+					<3 RK_PB5 2 &pcfg_pull_none>;
+			};
+
+			rmii1_clk_pins: rmii1-clk-pins {
+				rockchip,pins =
+					/* rmii1_clk */
+					<3 RK_PB0 2 &pcfg_pull_none>;
+			};
+
+			rmii1_rx_pins: rmii1-rx-pins {
+				rockchip,pins =
+					/* rmii1_rxd0 */
+					<3 RK_PA6 2 &pcfg_pull_none>,
+					/* rmii1_rxd1 */
+					<3 RK_PA7 2 &pcfg_pull_none>,
+					/* rmii1_crs_dv */
+					<3 RK_PB6 2 &pcfg_pull_none>;
+			};
+
+			rmii1_tx_pins: rmii1-tx-pins {
+				rockchip,pins =
+					/* rmii1_txd0 */
+					<3 RK_PB1 2 &pcfg_pull_none>,
+					/* rmii1_txd1 */
+					<3 RK_PB2 2 &pcfg_pull_none>,
+					/* rmii1_txen */
+					<3 RK_PB3 2 &pcfg_pull_none>;
 			};
 		};
 	};

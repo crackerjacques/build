@@ -1,0 +1,111 @@
+pinctrl: rockchip: rk3506: add RM_IO flexible pinmux support
+
+The RK3506 routes most GPIO0/GPIO1 pads through a flexible "RM_IO" mux
+matrix (the "rockchip,rmio" syscon, grf_pmu on this SoC): a pad can be
+muxed to almost any peripheral (uart/i2c/spi/pwm/sai/pdm/spdif/can/...)
+selected by a 7-bit function number, on top of the normal IOMUX.
+
+The auto-generated rk3506 RM_IO pin groups encode this as a mux value
+above the plain IOMUX width. Teach the driver to handle it: a mux value
+greater than the bank's IOMUX maximum is an RM_IO function (mux -
+iomux_max); write that 7-bit selector into the per-pad RM_IO mux register
+(write-enable style, mask 0x7f), then set the pad IOMUX to 7 (RM_IO
+mode). Pads without an RM_IO matrix entry are rejected.
+
+The rk3506 pin banks (4-bit IOMUX on GPIO0..GPIO1) already match the
+generated groups, so only the matrix write and the optional rmio syscon
+lookup are added; non-rk3506 SoCs are unaffected.
+
+Signed-off-by: crackerjacques <jack@supremeoverlordjabs.co>
+
+--- a/drivers/pinctrl/pinctrl-rockchip.c	2026-06-28 01:58:16
++++ b/drivers/pinctrl/pinctrl-rockchip.c	2026-06-28 01:58:16
+@@ -1275,6 +1275,57 @@
+ 	}
+ 
+ 	return 0;
++}
++
++static int rockchip_set_rmio(struct rockchip_pin_bank *bank, int pin, int *mux)
++{
++	struct rockchip_pinctrl *info = bank->drvdata;
++	int iomux_num = pin / 8;
++	u32 mux_type = bank->iomux[iomux_num].type;
++	u32 iomux_max, data, rmask;
++	int reg, function;
++
++	if (info->ctrl->type != RK3506)
++		return 0;
++
++	if (mux_type & IOMUX_WIDTH_4BIT)
++		iomux_max = (1 << 4) - 1;
++	else if (mux_type & IOMUX_WIDTH_3BIT)
++		iomux_max = (1 << 3) - 1;
++	else
++		iomux_max = (1 << 2) - 1;
++
++	/* mux values above the plain IOMUX range select an RM_IO function */
++	if (*mux <= iomux_max)
++		return 0;
++	function = *mux - iomux_max;
++
++	if (!info->regmap_rmio) {
++		dev_err(info->dev, "RM_IO function %d needs the rockchip,rmio syscon\n",
++			function);
++		return -ENODEV;
++	}
++
++	if (bank->bank_num == 0 && pin < 24)
++		reg = 0x80 + 0x4 * pin;
++	else if (bank->bank_num == 1 && pin >= 9 && pin <= 11)
++		reg = 0xbc + 0x4 * pin;
++	else if (bank->bank_num == 1 && pin >= 18 && pin <= 19)
++		reg = 0xa4 + 0x4 * pin;
++	else if (bank->bank_num == 1 && pin >= 25 && pin <= 27)
++		reg = 0x90 + 0x4 * pin;
++	else {
++		dev_err(info->dev, "RM_IO not available on GPIO%d-%d\n",
++			bank->bank_num, pin);
++		return -EINVAL;
++	}
++
++	/* RM_IO mux register: 7-bit function selector with write-enable mask */
++	rmask = 0x7f007f;
++	data = 0x7f0000 | function;
++	*mux = 7;
++
++	return regmap_update_bits(info->regmap_rmio, reg, rmask, data);
+ }
+ 
+ /*
+@@ -1310,6 +1361,10 @@
+ 
+ 	dev_dbg(dev, "setting mux of GPIO%d-%d to %d\n", bank->bank_num, pin, mux);
+ 
++	ret = rockchip_set_rmio(bank, pin, &mux);
++	if (ret)
++		return ret;
++
+ 	if (bank->iomux[iomux_num].type & IOMUX_SOURCE_PMU)
+ 		regmap = info->regmap_pmu;
+ 	else if (bank->iomux[iomux_num].type & IOMUX_L_SOURCE_PMU)
+@@ -4505,6 +4560,9 @@
+ 	/* try to find the optional reference to the ioc1 syscon */
+ 	info->regmap_ioc1 = syscon_regmap_lookup_by_phandle_optional(np, "rockchip,ioc1");
+ 
++	/* try to find the optional reference to the rmio mux syscon */
++	info->regmap_rmio = syscon_regmap_lookup_by_phandle_optional(np, "rockchip,rmio");
++
+ 	ret = rockchip_pinctrl_register(pdev, info);
+ 	if (ret)
+ 		return ret;
+--- a/drivers/pinctrl/pinctrl-rockchip.h	2026-06-28 01:58:16
++++ b/drivers/pinctrl/pinctrl-rockchip.h	2026-06-28 01:58:16
+@@ -463,6 +463,7 @@
+ 	struct regmap			*regmap_pull;
+ 	struct regmap			*regmap_pmu;
+ 	struct regmap			*regmap_ioc1;
++	struct regmap			*regmap_rmio;
+ 	struct device			*dev;
+ 	struct rockchip_pin_ctrl	*ctrl;
+ 	struct pinctrl_desc		pctl;

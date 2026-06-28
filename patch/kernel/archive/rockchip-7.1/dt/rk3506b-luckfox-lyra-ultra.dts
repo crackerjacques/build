@@ -37,8 +37,11 @@
 
 &mmc {
 	bus-width = <4>;
+	/* SDR high-speed only. DDR52 reads were corrupting at init time (fsck
+	 * clean but mount EBADMSG, U-Boot "No partition table") because mainline
+	 * dw_mmc-rockchip has no rk3506 delay-line tuning, so DDR's tight timing
+	 * margin fails. SDR samples on one clock edge = double the margin. */
 	cap-mmc-highspeed;
-	mmc-ddr-1_8v;
 	non-removable;
 	no-sd;
 	no-sdio;
@@ -47,4 +50,27 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&sdmmc_clk_pins &sdmmc_cmd_pins &sdmmc_bus4_pins>;
 	status = "okay";
+};
+
+&gmac1 {
+	phy-mode = "rmii";
+	clock_in_out = "output";
+	snps,reset-gpio = <&gpio1 RK_PD0 GPIO_ACTIVE_LOW>;
+	snps,reset-active-low;
+	snps,reset-delays-us = <0 20000 100000>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&rmii1_miim_pins &rmii1_clk_pins &rmii1_rx_pins &rmii1_tx_pins>;
+	phy-handle = <&phy1>;
+	status = "okay";
+
+	mdio {
+		compatible = "snps,dwmac-mdio";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		phy1: ethernet-phy@1 {
+			compatible = "ethernet-phy-ieee802.3-c22";
+			reg = <1>;
+		};
+	};
 };
