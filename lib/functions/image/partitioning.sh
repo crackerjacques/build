@@ -51,7 +51,6 @@ function prepare_partitions() {
 	else
 		display_alert "e2fsprogs version" "$e2fsprogs_version does not support orphan_file" "info"
 	fi
-
 	# mkopts[fat] is empty
 	# mkopts[ext2] is empty
 	# mkopts[f2fs] is empty
@@ -59,6 +58,10 @@ function prepare_partitions() {
 	# mkopts[nilfs2] is empty
 	# mkopts[xfs] is empty
 	# mkopts[nfs] is empty
+
+	if [[ -n "$BTRFS_CHECKSUM" ]]; then
+		mkopts[btrfs]+=" --checksum=$BTRFS_CHECKSUM "
+	fi
 
 	mkopts_label[ext4]='-L '
 	mkopts_label[ext2]='-L '
@@ -356,15 +359,17 @@ function prepare_partitions() {
 			run_host_command_logged btrfs subvolume set-default "$MOUNT/$btrfs_root_subvolume"
 
 			call_extension_method "btrfs_root_add_subvolumes" <<- 'BTRFS_ROOT_ADD_SUBVOLUMES'
-				# *custom post btrfs rootfs creation hook*
-				# Called if rootfs btrfs after creating the subvolume "@" for rootfs
-				# Used to create other separate btrfs subvolume if needed.
-				# Mountpoints and fstab records should be created too.
+				custom post-btrfs-rootfs-creation hook
+				Called when the rootfs is btrfs, right after the `@` subvolume is created, so an
+				extension can add other separate btrfs subvolumes (creating their mountpoints and
+				fstab entries too). Example:
+				```
 				run_host_command_logged btrfs subvolume create $MOUNT/@home
 				run_host_command_logged btrfs subvolume create $MOUNT/@var
 				run_host_command_logged btrfs subvolume create $MOUNT/@var_log
 				run_host_command_logged btrfs subvolume create $MOUNT/@var_cache
 				run_host_command_logged btrfs subvolume create $MOUNT/@srv
+				```
 			BTRFS_ROOT_ADD_SUBVOLUMES
 
 			run_host_command_logged umount "$rootdevice"
@@ -376,6 +381,10 @@ function prepare_partitions() {
 		echo "$rootfs / ${mkfs[$ROOTFS_TYPE]} defaults${mountopts[$ROOTFS_TYPE]} 0 1" >> "${SDCARD}/etc/fstab"
 		if [[ $ROOTFS_TYPE == btrfs ]]; then
 			call_extension_method "btrfs_root_add_subvolumes_fstab" <<- 'BTRFS_ROOT_ADD_SUBVOLUMES_FSTAB'
+				custom hook to add the btrfs subvolume fstab entries
+				Called after `btrfs_root_add_subvolumes`, to mount the extra subvolumes and write
+				their `/etc/fstab` entries. Example:
+				```
 				run_host_command_logged mkdir -p $MOUNT/home
 				run_host_command_logged mount -odefaults${mountopts[$ROOTFS_TYPE]},subvol=@home $rootdevice $MOUNT/home
 				echo "$rootfs /home btrfs defaults${mountopts[$ROOTFS_TYPE]},subvol=@home 0 2" >> $SDCARD/etc/fstab
@@ -391,6 +400,7 @@ function prepare_partitions() {
 				run_host_command_logged mkdir -p  $MOUNT/srv
 				run_host_command_logged mount -odefaults${mountopts[$ROOTFS_TYPE]},subvol=@srv $rootdevice $MOUNT/srv
 				echo "$rootfs /srv btrfs defaults${mountopts[$ROOTFS_TYPE]},subvol=@srv 0 2" >> $SDCARD/etc/fstab
+				```
 			BTRFS_ROOT_ADD_SUBVOLUMES_FSTAB
 		fi
 

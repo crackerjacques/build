@@ -1,11 +1,5 @@
 #!/usr/bin/env bash
-
-# Fetch Qualcomm flash binaries early in the build
-function post_family_config__fetch_qcombin() {
-	[[ "${CONFIG_DEFS_ONLY}" == "yes" ]] && return 0 # skip fetch during config-dump-json (no $HOME, no network needed)
-	display_alert "Fetching qcombin" "${BOARD}" "info"
-	fetch_from_repo "https://github.com/armbian/qcombin" "qcombin" "branch:main"
-}
+# @description Converts the Armbian image into a QDL-flashable `.tar` archive for the Arduino UNO Q (Qualcomm QRB2210). Splits the boot and root partitions with `dd` and extracts the U-Boot `boot.img` from the rootfs. Bundles Qualcomm firehose flash binaries fetched from the `armbian/qcombin` repo during image creation.
 
 declare -g ARDUINO_ROOTFS_LOOP=""
 declare -g ARDUINO_ROOTFS_MOUNT=""
@@ -13,6 +7,14 @@ declare -g ARDUINO_ROOTFS_MOUNT=""
 # Convert standard Armbian image into a QDL-flashable archive for Arduino UNO Q
 function post_build_image__900_convert_to_arduino_img() {
 	[[ -z $version ]] && exit_with_error "version is not set"
+
+	# Fetch the Qualcomm QDL flash binaries (qcombin) here, at the point of use.
+	# This deliberately does NOT run at config time (post_family_config): that hook
+	# also fires for download-artifact and config-dump-json, which run with a
+	# throwaway/absent $HOME, so 'git config --global' inside fetch_from_repo fails
+	# (exit 128) - and qcombin is only ever consumed when actually building an image.
+	display_alert "Fetching qcombin" "${BOARD}" "info"
+	fetch_from_repo "https://github.com/armbian/qcombin" "qcombin" "branch:main"
 
 	display_alert "Creating QDL flash archive" "${version}" "info"
 

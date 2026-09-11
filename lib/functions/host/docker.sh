@@ -140,10 +140,7 @@ function docker_cli_prepare() {
 	[[ -z "${build_suffix}" ]] && build_suffix="$(printf '%08x' "$$")" # no sha256sum: PID hex
 	declare -g DOCKER_ARMBIAN_LOCAL_IMAGE_REPO="armbian.local.only/armbian-build"
 	declare -g DOCKER_ARMBIAN_INITIAL_IMAGE_TAG="${DOCKER_ARMBIAN_LOCAL_IMAGE_REPO}:${build_suffix}"
-	# declare -g DOCKER_ARMBIAN_BASE_IMAGE="${DOCKER_ARMBIAN_BASE_IMAGE:-"debian:trixie"}"
-	# declare -g DOCKER_ARMBIAN_BASE_IMAGE="${DOCKER_ARMBIAN_BASE_IMAGE:-"debian:bookworm"}"
-	# declare -g DOCKER_ARMBIAN_BASE_IMAGE="${DOCKER_ARMBIAN_BASE_IMAGE:-"debian:sid"}"
-	declare -g DOCKER_ARMBIAN_BASE_IMAGE="${DOCKER_ARMBIAN_BASE_IMAGE:-"ubuntu:noble"}"
+	declare -g DOCKER_ARMBIAN_BASE_IMAGE="${DOCKER_ARMBIAN_BASE_IMAGE:-"debian:trixie"}"
 	declare -g DOCKER_ARMBIAN_TARGET_PATH="${DOCKER_ARMBIAN_TARGET_PATH:-"/armbian"}"
 
 	declare wanted_os_tag="${DOCKER_ARMBIAN_BASE_IMAGE%%:*}"
@@ -357,7 +354,17 @@ function docker_cli_prepare_dockerfile() {
 	# so the arch-specific host-dependency guards (skipping cross-compilers that
 	# don't exist on riscv64, etc.) match the image being produced, not the runner.
 	declare host_arch
-	host_arch="${DOCKER_ARMBIAN_HOST_ARCH:-"$(dpkg --print-architecture)"}"
+	if [[ -n "${DOCKER_ARMBIAN_HOST_ARCH:-}" ]]; then
+		host_arch="${DOCKER_ARMBIAN_HOST_ARCH}"
+	elif [[ "${DOCKER_IS_PODMAN}" == "yes" ]]; then
+		host_arch="$(docker version --format '{{.OsArch}}')"
+		host_arch="${host_arch##*/}"
+	else
+		# Resolve the architecture where the Dockerfile will actually build.
+		# This also avoids relying on host tools such as dpkg, which may not
+		# exist on macOS or non-Debian Docker hosts.
+		host_arch="$(docker version --format '{{.Server.Arch}}')"
+	fi
 	host_release="${DOCKER_WANTED_RELEASE}" host_arch="${host_arch}" early_prepare_host_dependencies # hooks: add_host_dependencies // host_dependencies_known
 	display_alert "Pre-game host dependencies for host_release '${DOCKER_WANTED_RELEASE}' host_arch '${host_arch}'" "${host_dependencies[*]}" "debug"
 
@@ -519,10 +526,17 @@ function docker_cli_prepare_launch() {
 		# Change the ccache directory to the named volume or bind created. @TODO: this needs more love. it works for Docker, but not sudo
 		"--env" "CCACHE_DIR=${DOCKER_ARMBIAN_TARGET_PATH}/cache/ccache"
 
-		# Pass down the TERM, COLORFGBG, and the COLUMNS
+		# Forward CPUTHREADS (the build's `make -j` override) into the container.
+		# It is an env var, not a CLI arg, so without this passthrough the container
+		# never sees it and falls back to the default CPU-based thread count.
+		"--env" "CPUTHREADS=${CPUTHREADS-}"
+
+		# Pass down the TERM, COLORFGBG, and the COLUMNS. docker run has no --tty,
+		# so the container can't measure the terminal itself; forward the width
+		# captured on the host (ARMBIAN_TTY_COLUMNS) so patch tables match it.
 		"--env" "TERM=${TERM}"
 		"--env" "COLORFGBG=${COLORFGBG-}"
-		"--env" "COLUMNS=${COLUMNS:-"160"}"
+		"--env" "COLUMNS=${COLUMNS:-${ARMBIAN_TTY_COLUMNS:-}}"
 
 		# Pass down the CI env var (GitHub Actions, Jenkins, etc)
 		"--env" "CI=${CI}"                         # All CI's, hopefully

@@ -67,7 +67,7 @@ function armbian_kernel_config__netkit() {
 function armbian_kernel_config__disable_various_options() {
 	display_alert "Enable EXPERT=y" "armbian-kernel" "debug"
 	opts_y+=("EXPERT") # Too many config options are hidden behind EXPERT=y, lets have it always on
-	display_alert "Disabling module signing / debug / auto version" "armbian-kernel" "debug"
+	display_alert "Disabling module signing / auto versioning" "armbian-kernel" "debug"
 	opts_n+=("SECURITY_LOCKDOWN_LSM") # Disables Linux Security Module lockdown mode
 	opts_n+=("MODULE_SIG")            # No use signing modules
 	opts_n+=("MODULE_SIG_ALL")        # No use auto-signing modules
@@ -410,6 +410,49 @@ function armbian_kernel_config__select_nftables() {
 	opts_m+=("IP_SET_BITMAP_PORT")    # IP set bitmap:port type
 }
 
+# Enables the IP tunnel and encapsulation drivers for every kernel we build.
+#
+# Armbian boards are routinely used as routers and VPN endpoints, and the tunnel
+# drivers are what that needs. They were never decided fleet-wide, so the shipped
+# configs drifted: across the 122 of them the IPv4 half is nearly universal
+# (NET_IPIP 85, NET_IPGRE 78) while the IPv6 half is patchy (IPV6_GRE 62,
+# IPV6_SIT 54) and IPV6_TUNNEL is enabled in only 24 -- with 8 configs setting it
+# to "not set" outright. Whether a given board can terminate a tunnel came down
+# to which family config it happened to be built from.
+#
+# The IPv6 side is the one that bites. DS-Lite (RFC 6333) terminates an
+# IPv4-in-IPv6 tunnel on the customer router and needs ip6_tnl; it is the
+# standard deployment on a large share of European fibre and cable lines, where
+# the carrier hands out CGNAT-only IPv4 that is not routed. Without it a board
+# used as a router there has working IPv6 and no IPv4 at all.
+#
+# All modules, so nothing is paid for until a tunnel is actually created. The two
+# built-ins are bool options extending a driver, not separate modules. Kernels
+# whose dependencies are unmet drop them at olddefconfig, so families without
+# IPv6 are unaffected. Note this also normalises the handful of configs that
+# built one of these in (=y) down to a module.
+#
+# Deliberately not here: NET_FOU (foo-over-UDP) is genuinely niche, and WIREGUARD
+# is a VPN rather than a tunnel driver -- and is already in 101 of 122 configs.
+function armbian_kernel_config__select_tunnels() {
+	# IPv4 tunnelling
+	opts_m+=("NET_IPIP")            # IP-in-IP tunnelling (ipip)
+	opts_m+=("NET_IPGRE_DEMUX")     # GRE demultiplexer, required by the GRE drivers
+	opts_m+=("NET_IPGRE")           # GRE tunnels over IPv4 (ip_gre)
+	opts_y+=("NET_IPGRE_BROADCAST") # bool: broadcast/multicast GRE
+
+	# IPv6 tunnelling
+	opts_m+=("IPV6_SIT")     # 6in4 / 6to4 tunnels (sit) -- HE tunnelbroker et al
+	opts_y+=("IPV6_SIT_6RD") # bool: 6RD extension to sit
+	opts_m+=("IPV6_TUNNEL")  # IP-in-IPv6 tunnel, RFC2473 (ip6_tnl) -- DS-Lite
+	opts_m+=("IPV6_GRE")     # GRE tunnels over IPv6 (ip6_gre)
+	opts_m+=("IPV6_VTI")     # virtual tunnel interface for IPsec over IPv6
+
+	# Overlay encapsulation. VXLAN is already forced by the Docker hook; GENEVE is
+	# its counterpart and was in only 68 configs, so pair them up.
+	opts_m+=("GENEVE") # Generic Network Virtualization Encapsulation
+}
+
 # Enables netfilter legacy xtables and ebtables support for kernels 6.18+.
 #
 # Linux 6.18 removed legacy xtables (iptables-legacy) support by default in favor
@@ -447,18 +490,24 @@ function armbian_kernel_config__enable_netfilter_xtables_legacy() {
 # Filesystems enabled:
 #   BTRFS_FS          - Btrfs filesystem with copy-on-write and snapshots
 #   EXT4_FS           - Extended filesystem 4 (standard Linux filesystem)
+#   F2FS_FS           - Flash-Friendly File System (armbian-install root option)
 #   EROFS_FS          - Enhanced Read-Only File System (useful for Docker images)
 #
 # Options enabled:
 #   BTRFS_FS_POSIX_ACL - POSIX Access Control Lists for Btrfs
 #   EXT4_FS_POSIX_ACL  - POSIX Access Control Lists for ext4
 #   EXT4_FS_SECURITY   - Security extensions for ext4
+#   F2FS_FS_XATTR      - Extended attributes for f2fs (required by F2FS_FS_SECURITY)
+#   F2FS_FS_SECURITY   - Security extensions for f2fs
 function armbian_kernel_config__enable_various_filesystems() {
 	opts_m+=("BTRFS_FS")           # Enables Btrfs filesystem (copy-on-write, snapshots)
 	opts_y+=("BTRFS_FS_POSIX_ACL") # Enables POSIX ACL support for Btrfs
 	opts_y+=("EXT4_FS")            # Enables ext4 filesystem support
 	opts_y+=("EXT4_FS_POSIX_ACL")  # Enables POSIX ACL support for ext4
 	opts_y+=("EXT4_FS_SECURITY")   # Enables security extensions for ext4
+	opts_m+=("F2FS_FS")            # Flash-Friendly FS - module, like btrfs (armbian-install root option)
+	opts_y+=("F2FS_FS_XATTR")      # Extended attributes for f2fs (F2FS_FS_SECURITY depends on it)
+	opts_y+=("F2FS_FS_SECURITY")   # Enables security extensions for f2fs
 	opts_m+=("EROFS_FS")           # Enhanced Read-Only FS (useful for Docker images)
 }
 

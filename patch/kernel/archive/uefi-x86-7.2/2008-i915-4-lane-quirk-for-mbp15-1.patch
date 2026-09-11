@@ -16,7 +16,7 @@ diff --git a/drivers/gpu/drm/i915/display/intel_ddi.c b/drivers/gpu/drm/i915/dis
 index 111111111111..222222222222 100644
 --- a/drivers/gpu/drm/i915/display/intel_ddi.c
 +++ b/drivers/gpu/drm/i915/display/intel_ddi.c
-@@ -4938,6 +4938,9 @@ static bool intel_ddi_a_force_4_lanes(struct intel_digital_port *dig_port)
+@@ -4940,6 +4940,9 @@ static bool intel_ddi_a_force_4_lanes(struct intel_digital_port *dig_port)
  	if (dig_port->ddi_a_4_lanes)
  		return false;
  
@@ -63,14 +63,14 @@ diff --git a/drivers/gpu/drm/i915/display/intel_quirks.h b/drivers/gpu/drm/i915/
 index 111111111111..222222222222 100644
 --- a/drivers/gpu/drm/i915/display/intel_quirks.h
 +++ b/drivers/gpu/drm/i915/display/intel_quirks.h
-@@ -22,6 +22,7 @@ enum intel_quirk_id {
- 	QUIRK_FW_SYNC_LEN,
+@@ -23,6 +23,7 @@ enum intel_quirk_id {
  	QUIRK_EDP_LIMIT_RATE_HBR2,
  	QUIRK_DISABLE_EDP_PANEL_REPLAY,
-+	QUIRK_DDI_A_FORCE_4_LANES,
  	QUIRK_DISABLE_PSR2,
++	QUIRK_DDI_A_FORCE_4_LANES,
  };
  
+ void intel_init_quirks(struct intel_display *display);
 -- 
 Armbian
 

@@ -155,6 +155,7 @@ function do_main_configuration() {
 			;;
 		btrfs)
 			enable_extension "fs-btrfs-support"
+			[[ -n "$BTRFS_CHECKSUM" && ! "$BTRFS_CHECKSUM" =~ ^(crc32c|xxhash|sha256|blake2)$ ]] && exit_with_error "Unknown btrfs checksum algorithm" "$BTRFS_CHECKSUM"
 			[[ -z $BTRFS_COMPRESSION ]] && BTRFS_COMPRESSION=zlib # default btrfs filesystem compression method is zlib
 			[[ ! $BTRFS_COMPRESSION =~ zlib|lzo|zstd|none ]] && exit_with_error "Unknown btrfs compression method" "$BTRFS_COMPRESSION"
 			;;
@@ -270,6 +271,10 @@ function do_main_configuration() {
 			;;
 	esac
 
+	# Note: this selects the mirror for BOOTSOURCE on boards that use mainline u-boot. It no
+	# longer has anything to do with the shared u-boot bare tree, which since the move to
+	# premade ORAS git trees always comes from ${GHCR_SOURCE} -- see uboot-git-oras.sh, and
+	# GHCR_MIRROR / GIT_ORAS_TARBALLS_SHALLOW_BASE_REF for redirecting that.
 	case $UBOOT_MIRROR in
 		gitee)
 			declare -g -r MAINLINE_UBOOT_SOURCE='https://gitee.com/mirrors/u-boot.git'
@@ -396,8 +401,9 @@ function do_extra_configuration() {
 	fi
 
 	DEBIAN_MIRROR='deb.debian.org/debian'
-	# loong64 is using debian-ports repo now
-	[[ "${ARCH}" == "loong64" ]] && DEBIAN_MIRROR='deb.debian.org/debian-ports'
+	# loong64 was promoted from debian-ports into the main Debian archive (it is
+	# listed in sid's Architectures: and dropped from debian-ports), so it now uses
+	# the default deb.debian.org/debian mirror like every other architecture.
 	DEBIAN_SECURITY='security.debian.org/'
 	[[ "${ARCH}" == "amd64" ]] &&
 		UBUNTU_MIRROR='archive.ubuntu.com/ubuntu/' ||
